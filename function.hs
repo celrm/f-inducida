@@ -1,8 +1,8 @@
-import Control.Monad --forever
+import Control.Monad (forever,guard)
 import Data.Function (on)
 import Data.Ord (comparing)
 import Data.List
-import Debug.Trace
+import Debug.Trace (trace)
 
 type Escala = [Int]
 
@@ -92,17 +92,18 @@ func nfixed esc =
             frecs = frecsx ++ [(first, frecfirst - length start)]
             -- Ponemos el h al final con su frecuencia ya restada
             newfixed =
-              (tail fixed) ++ [h]
+              take (nfixed-1) $ dropWhile (<= h) $ cycle fixed
         in return $ unCaso newfixed frecs start
      guard (length caso == long) -- Quito los que no tengan long (los [])
-     return $ renormalizar caso -- Pongo el 0 otra vez al principio
+     return $ renormalizar caso -- Pongo el 0 otra vez al principio...
 
--- Y lo pone en orden creciente
+-- y lo pongo en orden creciente
 renormalizar :: Escala -> Escala
 renormalizar (h:caso) =
   let (posterior,antes) = splitAt (long-h) (h:caso)
       (haches,despues) = span (==h) posterior
-  in (map (\i -> if i > h then i-long else i) antes)
+  in
+  (map (\i -> if i > h then i-long else i) antes)
   ++ haches
   ++ (map (\i -> if i <= h then i+long else i) despues)
 
