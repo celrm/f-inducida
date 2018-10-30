@@ -16,18 +16,38 @@ showE e = -- tail para el primer " "
   tail $ foldl (\acc i ->
     acc ++ " " ++ show i ++ if i >= 0 && i < 10 then " " else "") "" e
 
+showEscalas :: [Escala] -> String
+showEscalas [] = ""
+showEscalas e = (tail $ foldl (\acc i -> acc ++ "\n" ++ showE i) "" e)
+
 showEs :: [Escala] -> String
 showEs [] = ""
-showEs e = tail $ foldl (\acc i -> acc ++ "\n" ++ showE i) "" e
+showEs e =
+  let (sol,i) = eleccion e
+  in (showEscalas e)
+  ++ ("\n\nMayor ajuste (" ++ show i ++ "):\n")
+    ++ (showEscalas sol)
+    ++ if length sol > 1 then
+      ("\n\nLa más grave de ellas es:\n")
+      ++ (showE $ head $ sort sol)
+    else ""
+
+eleccion :: [Escala] -> ([Escala],Int)
+eleccion escs = --head $ sort escs
+  let solucion =
+        head $ groupBy (\x y -> snd x == snd y) $ sortBy (comparing snd) $ map (\e -> (e,
+          sum $ map (\(x,i) -> abs (x-i)) $ zip e [0..]
+        )) escs
+  in (map fst solucion, head $ map snd solucion)
 
 main :: IO String
 main = forever $ do
     esc <- getLine
-    putStrLn "Calculando..."
+    putStrLn "Calculando...\n"
     putStrLn $ showE [0..(long-1)]
     putStrLn $ replicate (long*3-1) '―'
     putStrLn $ showEs $ nub $ inducir $ toEscala esc
-    putStrLn "Terminado"
+    putStrLn "\nTerminado."
 
 toEscala :: String -> Escala
 toEscala esc = map (flip mod long . read) $ words esc
@@ -50,22 +70,11 @@ combinations 0 _ = [[]]
 combinations _ [] = []
 combinations n (x:xs) = (map (x:) (combinations (n-1) xs)) ++ (combinations n xs)
 
--- Notas con menos huequitos = dado esc, crear huequitos
 dissonances :: Escala -> [Escala]
 dissonances esc =
   let e = length esc
       q = e - mod long e
-      diferencia y x = ( abs (y - (esc !! (mod x e))))
-      huequitos =
-        groupBy (\x y -> snd x == snd y) $
-        sortBy (compare `on` fst) $
-        map (\(element,i) ->
-          ( diferencia element (i+1)
-          + diferencia element (i-1)
-          , i)
-        ) $ zip esc [0..e]
   in combinations q esc
---TODO not yet completed
 
 --qc + (e-q)(c+1) = long
 func :: Int -> Escala -> [Escala]
@@ -102,8 +111,7 @@ renormalizar :: Escala -> Escala
 renormalizar (h:caso) =
   let (posterior,antes) = splitAt (long-h) (h:caso)
       (haches,despues) = span (==h) posterior
-  in
-  (map (\i -> if i > h then i-long else i) antes)
+  in (map (\i -> if i > h then i-long else i) antes)
   ++ haches
   ++ (map (\i -> if i <= h then i+long else i) despues)
 
