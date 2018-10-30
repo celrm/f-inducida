@@ -1,5 +1,6 @@
 import Control.Monad --forever
-import Data.Function --on
+import Data.Function (on)
+import Data.Ord (comparing)
 import Data.List
 import Debug.Trace
 
@@ -8,9 +9,12 @@ type Escala = [Int]
 long :: Int
 long = 12
 
+-- El gran if es para doble hueco
 showE :: Escala -> String
 showE [] = ""
-showE e = tail $ foldl (\acc i -> acc ++ " " ++ show i ++ if i < 10 && i >= 0 then " " else "") "" e
+showE e = -- tail para el primer " "
+  tail $ foldl (\acc i ->
+    acc ++ " " ++ show i ++ if i >= 0 && i < 10 then " " else "") "" e
 
 showEs :: [Escala] -> String
 showEs [] = ""
@@ -28,56 +32,72 @@ main = forever $ do
 toEscala :: String -> Escala
 toEscala esc = map (flip mod long . read) $ words esc
 
+-- Llama a la función recursiva
 inducir :: Escala -> [Escala]
 inducir esc = fxp (length esc) esc []
 
---obliga a que haya alguna fixed. es esto obligatorio? -> he puesto demasiados head fixed
+-- Obliga a que haya alguna fixed
+-- ¿Existe alguna solución que no tenga 1 fixed pero sí 0?
+-- He puesto demasiados head fixed, supongamos que no
 fxp :: Int -> Escala -> [Escala] -> [Escala]
-fxp _ _ (r:rs) = r:rs --si está lleno, devuélvelo
-fxp 0 _ _ = [] --si ronda de 0 fixed points, muere
-fxp n c _ = fxp (n-1) c (func n c) --si quedan fixed points, llama a func y disminuye n
+fxp _ _ (x:xs) = x:xs --si encontró solución, devuélvelo
+fxp 0 _ _ = [] --si 0 fixed points, nada
+fxp n esc _ = fxp (n-1) esc (func n esc) --si quedan fixed points, llama a func y disminuye n
 
+-- #26 de H-99
 combinations :: Int -> [a] -> [[a]]
-combinations k s =
-  case (k,s) of
-    (0,_) -> [[]]
-    (_,[]) -> []
-    (_,e:s') -> map (e :) (combinations (k - 1) s') ++ combinations k s'
+combinations 0 _ = [[]]
+combinations _ [] = []
+combinations n (x:xs) = (map (x:) (combinations (n-1) xs)) ++ (combinations n xs)
 
+-- Notas con menos huequitos = dado esc, crear huequitos
 dissonances :: Escala -> [Escala]
 dissonances esc =
   let e = length esc
-      r = e - mod long e
-      total = combinations r esc
-  in [ x | x <- total ]           --TODO not yet completed
+      q = e - mod long e
+      diferencia y x = ( abs (y - (esc !! (mod x e))))
+      huequitos =
+        groupBy (\x y -> snd x == snd y) $
+        sortBy (compare `on` fst) $
+        map (\(element,i) ->
+          ( diferencia element (i+1)
+          + diferencia element (i-1)
+          , i)
+        ) $ zip esc [0..e]
+  in combinations q esc
+--TODO not yet completed
 
+--qc + (e-q)(c+1) = long
 func :: Int -> Escala -> [Escala]
-func n esc =
+func nfixed esc =
   let e = length esc
       c = div long e
   in
-  do fixed <- combinations n esc
+  do fixed <- combinations nfixed esc
      minfrec <- dissonances esc
-     start <-
+     start <- -- Posibles comienzos
         let h = head fixed
-            frech = c +
+            hfrec =
               if h `elem` minfrec
-                then 0
-                else 1
-        in take frech $ iterate (++ [h]) [h] --[[h], [h,h], [h,h,h]]
+                then c
+                else c + 1
+        in take hfrec $ iterate (++ [h]) [h] --[[h], [h,h], [h,h,h]]
      guard (length fixed == 1 || (fixed !! 1) - (head fixed) >= length start)
+     -- Quito los que tienen el segundo fixed dentro del ámbito del primero
      caso <-
         let h = head fixed
             ((first,frecfirst):frecsx) =
               map (\ha -> if ha `elem` minfrec then (ha,c) else (ha,c+1)) $
               take e $ dropWhile (< h) $ cycle esc
             frecs = frecsx ++ [(first, frecfirst - length start)]
+            -- Ponemos el h al final con su frecuencia ya restada
             newfixed =
-              take (n-1) $ dropWhile (<= h) $ cycle fixed
-        in [unCaso newfixed frecs start]
-     guard (length caso == long)
-     return $ renormalizar caso
+              (tail fixed) ++ [h]
+        in return $ unCaso newfixed frecs start
+     guard (length caso == long) -- Quito los que no tengan long (los [])
+     return $ renormalizar caso -- Pongo el 0 otra vez al principio
 
+-- Y lo pone en orden creciente
 renormalizar :: Escala -> Escala
 renormalizar (h:caso) =
   let (posterior,antes) = splitAt (long-h) (h:caso)
@@ -86,19 +106,22 @@ renormalizar (h:caso) =
   ++ haches
   ++ (map (\i -> if i <= h then i+long else i) despues)
 
+-- Dados los puntos fijos, las frecuencias y el resultado
 unCaso :: Escala -> [(Int,Int)] -> Escala -> Escala
-unCaso _ _ [] = []
-unCaso _ [] r = r
-unCaso [] ((next, nextfrec):frecs) start =
+unCaso _ _ [] = [] -- Si no hay start ha habido un problema. No puede ocurrir.
+unCaso _ [] x = x  -- Si no quedan frecuencias hemos acabado
+unCaso [] ((next, nextfrec):frecs) start = -- Si no quedan fixed points simplemente rellenar
   unCaso [] frecs $
     start ++ replicate nextfrec next
-unCaso (f:fixed) ((next, nextfrec):frecs) (s:start) =
-  if f == mod (1 + s + length start) long -- f es el siguiente índice
-    then if next == f --si no es igual no está fijado
+unCaso (f:fixed) ((next, nextfrec):frecs) (s:start) = -- Si quedan...
+  if f == mod (1 + s + length start) long
+  -- Si el f es el siguiente índice, el next tiene que ser ese índice, porque f es fijo.
+    then if next == f
       then unCaso fixed ((if nextfrec == 1 then [] else [(next, nextfrec-1)]) ++ frecs) $
            (s:start) ++ [next]
       else []
-    else if next <= f --no me he quedado corta
+    else if next <= f
+    --Si no necesito fijar a continuación, entonces el next no puede haberse pasado del siguiente f
       then unCaso (f:fixed) ((if nextfrec == 1 then [] else [(next, nextfrec-1)]) ++ frecs) $
            (s:start) ++ [next]
       else []
