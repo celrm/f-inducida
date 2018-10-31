@@ -69,7 +69,7 @@ showResult scales
       putStrLn
         $ showScales bestFits
       putStrLn
-        "\nLa más grave de ellas es:"
+        "\nLa más grave es:"
       putStrLn
         $ showScale
         $ head
@@ -172,7 +172,7 @@ dissonances scale
 
 
 -- q es el tamaño del subconjunto de frecuencias menores.
--- c la frecuencia menor.
+-- c es la frecuencia menor.
 -- long = qc + (e - q)(c + 1)
 func :: Int -> Scale -> [Scale]
 func nfixed scale
@@ -181,26 +181,28 @@ func nfixed scale
     in do
       fixed <-
         combinations nfixed scale
-      minfrec <-
+      minFreq <-
         dissonances scale
       start <-  --[[h], [h,h], [h,h,h]]
         let
         h = head fixed
-        hfrec =
-          if h `elem` minfrec
+        hFreq =
+          if h `elem` minFreq
             then c
             else c + 1
         in
-        take hfrec $ iterate (++ [h]) [h]
+        take hFreq $ iterate (++ [h]) [h]
       -- Quito los que tienen el 2o fixed dentro del ámbito del 1o.
-      guard (length fixed == 1 || (fixed !! 1) - (head fixed) >= length start)
-      caso <-
+      guard
+        (length fixed == 1
+        || (fixed !! 1) - (head fixed) >= length start)
+      result <-
         let
         h = head fixed
-        ( (first, frecfirst) : frecsx )
+        ( (first, freqFirst) : oldFreqs )
           = map
             (\ha ->
-              if ha `elem` minfrec
+              if ha `elem` minFreq
                 then (ha, c)
                 else (ha, c + 1)
              )
@@ -208,30 +210,31 @@ func nfixed scale
           $ dropWhile (< h)
           $ cycle
             scale
-        frecs  -- Ponemos el h al final con su frecuencia ya restada.
-          = frecsx
-          ++ [ (first, frecfirst - length start) ]
+        freqs  -- Ponemos el h al final con su frecuencia ya restada.
+          = oldFreqs
+          ++ [ (first, freqFirst - length start) ]
         newfixed
           = take (nfixed - 1)
           $ dropWhile (<= h)
           $ cycle
             fixed
-        in return $ oneCase newfixed frecs start
-      guard (length caso == long) -- Quito los que no tengan long (los []).
-      return $ renormalizar caso
+        in return $ oneCase newfixed freqs start
+      guard
+        (length result == long) -- Quito los que no tengan long (los []).
+      return $ normalize result
 
--- Pongo el 0 otra vez al principio
+-- Pongo el índice 0 otra vez al principio
 -- y lo pongo en orden creciente.
-renormalizar :: Scale -> Scale
-renormalizar []
+normalize :: Scale -> Scale
+normalize []
   = []
-renormalizar hcaso@(h:_)
+normalize result@(h:_)
     =  map (\i -> if i >  h then i - long else i) antes
     ++ haches
     ++ map (\i -> if i <= h then i + long else i) despues
   where
     (posterior, antes)
-      = splitAt (long - h) hcaso
+      = splitAt (long - h) result
     (haches, despues)
       = span (== h) posterior
 
@@ -242,32 +245,32 @@ oneCase _ _ []
   = []  -- Si no hay start ha habido un problema. No puede ocurrir.
 oneCase _ [] x
   = x   -- Si no quedan frecuencias, hemos acabado bien.
-oneCase [] ((next, nextfrec):frecs) start
+oneCase [] ((next, nextFreq):freqs) start
   =     -- Si no quedan fixed points, simplemente rellenar.
   oneCase
     []
-    frecs $
-    start ++ replicate nextfrec next
+    freqs $
+    start ++ replicate nextFreq next
 
 -- Si quedan fixed points:
-oneCase ffixed@(f:fixed) ((next, nextfrec):frecs) sstart@(s:start)
+oneCase ffixed@(f:fixed) ((next, nextFreq):freqs) sstart@(s:start)
     -- Si f es el siguiente índice, next tiene que ser ese índice porque f es fijo.
-    | f==currentIndex && f==next =
-      oneCase
+    | f==currentIndex && f==next
+    = oneCase
         fixed
-        ((eraseFrec next nextfrec) ++ frecs) $
+        ((eraseFreq next nextFreq) ++ freqs) $
         sstart ++ [next]
     --Si no necesito fijar a continuación, entonces el next no puede haberse pasado del siguiente f
-    | f/=currentIndex && f>=next =
-      oneCase
+    | f/=currentIndex && f>=next
+    = oneCase
         ffixed
-        ((eraseFrec next nextfrec) ++ frecs) $
+        ((eraseFreq next nextFreq) ++ freqs) $
         sstart ++ [next]
     | otherwise = []
   where
-    currentIndex =
-      1 + s + length start
-    eraseFrec element frec =
-      if frec == 1
-        then []
-        else [(element, frec-1)]
+    currentIndex
+      = 1 + s + length start
+    eraseFreq element freq
+      = if freq == 1
+          then []
+          else [(element, freq-1)]
