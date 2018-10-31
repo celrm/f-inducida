@@ -13,14 +13,37 @@ long :: Int
 long = 12
 
 
+main :: IO String
+main
+  = forever
+  $ do
+      scale <- getLine
+      putStrLn
+        "Calculando...\n"
+      showResult
+        $ nub
+        $ induce
+        $ toScale
+          scale
+      putStrLn
+        "\nTerminado."
+
+
+toScale :: String -> Scale
+toScale scale
+  = (\x -> if length x > 12 then [] else x)
+  $ map
+    (flip mod long . fst . head)
+  $ filter (not . null)
+  $ map reads
+  $ words
+    scale
+
+
 -- Mostrar una escala.
 showScale :: Scale -> String
-showScale []
-  = ""
-
 showScale scale
-  = tail  -- El tail quita el primer espacio.
-          -- Por eso se necesita separar entre escala vacía y no vacía.
+  = drop 1  -- Quita el primer espacio.
   $ foldl
     (\acc i ->
       acc
@@ -35,11 +58,8 @@ showScale scale
 
 -- Mostrar varias escalas.
 showScales :: [Scale] -> String
-showScales []
-  = ""
-
 showScales scales
-  = tail
+  = drop 1
   $ foldl
     (\acc sc ->
       acc
@@ -50,6 +70,7 @@ showScales scales
 
 -- Mostrar el resultado del cálculo.
 showResult :: [Scale] -> IO ()
+-- `best` requiere no vacío. Si ponemos la restricción en `best`, entonces falla head aquí.
 showResult []
   = return ()
 
@@ -101,32 +122,6 @@ best scales
           )
         )
         scales
-
-
-main :: IO String
-main
-  = forever
-  $ do
-      scale <- getLine
-      putStrLn
-        "Calculando...\n"
-      showResult
-        $ nub
-        $ induce
-        $ toScale
-          scale
-      putStrLn
-        "\nTerminado."
-
-
-toScale :: String -> Scale
-toScale scale
-  = map
-    (flip mod long . fst . head)
-  $ filter (not . null)
-  $ map reads
-  $ words
-    scale
 
 
 -- Llama a la función recursiva de fixed points.
@@ -212,7 +207,9 @@ func nfixed scale
             scale
         freqs  -- Ponemos el h al final con su frecuencia ya restada.
           = oldFreqs
-          ++ [ (first, freqFirst - length start) ]
+          ++ if freqFirst /= length start
+              then [ (first, freqFirst - length start) ]
+              else []
         newfixed
           = take (nfixed - 1)
           $ dropWhile (<= h)
@@ -229,14 +226,14 @@ normalize :: Scale -> Scale
 normalize []
   = []
 normalize result@(h:_)
-    =  map (\i -> if i >  h then i - long else i) antes
-    ++ haches
-    ++ map (\i -> if i <= h then i + long else i) despues
+    =  map (\i -> if i >  h then i - long else i) before
+    ++ hh
+    ++ map (\i -> if i <= h then i + long else i) after
   where
-    (posterior, antes)
+    (hhafter, before)
       = splitAt (long - h) result
-    (haches, despues)
-      = span (== h) posterior
+    (hh, after)
+      = span (== h) hhafter
 
 
 -- Dados los puntos fijos, las frecuencias y el resultado
@@ -253,23 +250,23 @@ oneCase [] ((next, nextFreq):freqs) start
     start ++ replicate nextFreq next
 
 -- Si quedan fixed points:
-oneCase ffixed@(f:fixed) ((next, nextFreq):freqs) sstart@(s:start)
-    -- Si f es el siguiente índice, next tiene que ser ese índice porque f es fijo.
+oneCase ffixed@(f:fixed) ((next, nextFreq):freqs) start@(s:_)
+    -- Si f es igual al siguiente índice, next tiene que ser ese índice porque f es fijo.
     | f==currentIndex && f==next
     = oneCase
-        fixed
+        fixed  -- Ya hemos usado f; lo desechamos.
         ((eraseFreq next nextFreq) ++ freqs) $
-        sstart ++ [next]
-    --Si no necesito fijar a continuación, entonces el next no puede haberse pasado del siguiente f
+        start ++ [next]
+    --Si no necesito fijar, entonces next no puede pasarse del siguiente fixed point f.
     | f/=currentIndex && f>=next
     = oneCase
         ffixed
         ((eraseFreq next nextFreq) ++ freqs) $
-        sstart ++ [next]
+        start ++ [next]
     | otherwise = []
   where
     currentIndex
-      = 1 + s + length start
+      = s + length start
     eraseFreq element freq
       = if freq == 1
           then []
