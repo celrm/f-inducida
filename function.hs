@@ -216,7 +216,7 @@ func nfixed scale
           $ dropWhile (<= h)
           $ cycle
             fixed
-        in return $ unCaso newfixed frecs start
+        in return $ oneCase newfixed frecs start
       guard (length caso == long) -- Quito los que no tengan long (los []).
       return $ renormalizar caso
 
@@ -237,26 +237,37 @@ renormalizar hcaso@(h:_)
 
 
 -- Dados los puntos fijos, las frecuencias y el resultado
-unCaso :: Scale -> [(Int, Int)] -> Scale -> Scale
-unCaso _ _ []
+oneCase :: Scale -> [(Int, Int)] -> Scale -> Scale
+oneCase _ _ []
   = []  -- Si no hay start ha habido un problema. No puede ocurrir.
-unCaso _ [] x
+oneCase _ [] x
   = x   -- Si no quedan frecuencias, hemos acabado bien.
-unCaso [] ((next, nextfrec):frecs) start
+oneCase [] ((next, nextfrec):frecs) start
   =     -- Si no quedan fixed points, simplemente rellenar.
-  unCaso [] frecs $
+  oneCase
+    []
+    frecs $
     start ++ replicate nextfrec next
 
-unCaso (f:fixed) ((next, nextfrec):frecs) (s:start)
-  = -- Si quedan...
-  if f == mod (1 + s + length start) long
-  -- Si el f es el siguiente índice, el next tiene que ser ese índice, porque f es fijo.
-    then if next == f
-      then unCaso fixed ((if nextfrec == 1 then [] else [(next, nextfrec-1)]) ++ frecs) $
-           (s:start) ++ [next]
-      else []
-    else if next <= f
+-- Si quedan fixed points:
+oneCase ffixed@(f:fixed) ((next, nextfrec):frecs) sstart@(s:start)
+    -- Si f es el siguiente índice, next tiene que ser ese índice porque f es fijo.
+    | f==currentIndex && f==next =
+      oneCase
+        fixed
+        ((eraseFrec next nextfrec) ++ frecs) $
+        sstart ++ [next]
     --Si no necesito fijar a continuación, entonces el next no puede haberse pasado del siguiente f
-      then unCaso (f:fixed) ((if nextfrec == 1 then [] else [(next, nextfrec-1)]) ++ frecs) $
-           (s:start) ++ [next]
-      else []
+    | f/=currentIndex && f>=next =
+      oneCase
+        ffixed
+        ((eraseFrec next nextfrec) ++ frecs) $
+        sstart ++ [next]
+    | otherwise = []
+  where
+    currentIndex =
+      1 + s + length start
+    eraseFrec element frec =
+      if frec == 1
+        then []
+        else [(element, frec-1)]
