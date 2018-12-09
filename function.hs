@@ -1,8 +1,6 @@
 import Control.Monad (forever, guard)
 import Data.List
 import Data.Ord (comparing)
---import Data.Function (on)
---import Debug.Trace (trace)
 
 
 type Scale = [Int]
@@ -23,18 +21,21 @@ main
       showResult
         $ nub
         $ induce
-        $ toScale
+        $ readScale
           scale
       putStrLn
         "\nTerminado."
 
 
-toScale :: String -> Scale
-toScale scale
-  = (\x -> if length x > 12 then [] else x)
+readScale :: String -> Scale
+readScale scale
+  = nub
+  $ sort
+  $ (\x -> if length x > 12 then [] else x)
   $ map
     (flip mod long . fst . head)
-  $ filter (not . null)
+  $ filter
+    (not . null)
   $ map reads
   $ words
     scale
@@ -70,7 +71,8 @@ showScales scales
 
 -- Mostrar el resultado del cálculo.
 showResult :: [Scale] -> IO ()
--- `best` requiere no vacío. Si ponemos la restricción en `best`, entonces falla head aquí.
+-- `best` requiere no vacío.
+-- Si ponemos la restricción en `best`, entonces falla head aquí.
 showResult []
   = return ()
 
@@ -83,10 +85,9 @@ showResult scales
       putStrLn
         $ showScales scales
       putStrLn
-        ( "\nMayor ajuste ("
+        $ "\nMayor ajuste ("
         ++ show bestPunct
         ++ "):"
-        )
       putStrLn
         $ showScales bestFits
       putStrLn
@@ -108,20 +109,28 @@ best scales
     )
   where
     solution
-      = head  -- El primer grupo con la mínima distancia.
+      = head  -- El primer grupo tiene la mínima distancia.
       $ groupBy
         (\x y -> snd x == snd y)
       $ sortBy
         (comparing snd)  -- La menor distancia.
       $ map
-        (\e ->
-          (e, sum  -- La suma de las distancias
-            $ map  -- entre la función y la escala cromática.
-              (\(x, i) -> abs (x-i))
-            $ zip e [0..]
-          )
-        )
+        (\s -> (s, norm s))
         scales
+
+
+norm :: Scale -> Int
+norm s
+  = sum  -- La suma de las distancias
+  $ map  -- entre la función y la escala cromática.
+    (\(x, i) -> abs (x-i))
+  $ zip s [0..]
+  -- = sqrt
+  -- $ fromIntegral
+  -- $ sum
+  -- $ map
+  --   (\(x, i) -> (x-i)*(x-i))
+  -- $ zip s [0..]
 
 
 -- Llama a la función recursiva de fixed points.
@@ -144,7 +153,7 @@ fxp 0 _ _
 fxp nfixed scale _
   = fxp (nfixed - 1) scale (func nfixed scale)
 
-
+-- TODO importarlo de sitio existente
 -- #26 de H-99
 combinations :: Int -> [a] -> [[a]]
 combinations 0 _
@@ -219,6 +228,7 @@ func nfixed scale
       guard
         (length result == long) -- Quito los que no tengan long (los []).
       return $ normalize result
+
 
 -- Pongo el índice 0 otra vez al principio
 -- y lo pongo en orden creciente.
