@@ -1,10 +1,59 @@
-import Control.Monad (forever, guard)
-import Data.List
-import Data.Ord (comparing)
+comparing :: (Ord a) => (b -> a) -> b -> b -> Ordering
+comparing p x y = compare (p x) (p y)
+
+forever     :: (Applicative f) => f a -> f b
+forever a   = let a' = a *> a' in a'
+
+
+
+nub                     :: (Eq a) => [a] -> [a]
+nub                     =  nubBy (==)
+
+nubBy                   :: (a -> a -> Bool) -> [a] -> [a]
+nubBy eq []             =  []
+nubBy eq (x:xs)         =  x : nubBy eq (filter (\ y -> not (eq x y)) xs)
+
+sort :: (Ord a) => [a] -> [a]
+sort = sortBy compare
+
+sortBy :: (a -> a -> Ordering) -> [a] -> [a]
+sortBy cmp = mergeAll . sequences
+  where
+    sequences (a:b:xs)
+      | a `cmp` b == GT = descending b [a]  xs
+      | otherwise       = ascending  b (a:) xs
+    sequences xs = [xs]
+
+    descending a as (b:bs)
+      | a `cmp` b == GT = descending b (a:as) bs
+    descending a as bs  = (a:as): sequences bs
+
+    ascending a as (b:bs)
+      | a `cmp` b /= GT = ascending b (\ys -> as (a:ys)) bs
+    ascending a as bs   = let !x = as [a]
+                          in x : sequences bs
+
+    mergeAll [x] = x
+    mergeAll xs  = mergeAll (mergePairs xs)
+
+    mergePairs (a:b:xs) = let !x = merge a b
+                          in x : mergePairs xs
+    mergePairs xs       = xs
+
+    merge as@(a:as') bs@(b:bs')
+      | a `cmp` b == GT = b:merge as  bs'
+      | otherwise       = a:merge as' bs
+    merge [] bs         = bs
+    merge as []         = as
+
+
+groupBy                 :: (a -> a -> Bool) -> [a] -> [[a]]
+groupBy _  []           =  []
+groupBy eq (x:xs)       =  (x:ys) : groupBy eq zs
+                               where (ys,zs) = span (eq x) xs
 
 
 type Scale = [Int]
-
 
 -- Es la longitud de la escala cromática: el cardinal del dominio.
 long :: Int
@@ -17,19 +66,24 @@ main
   $ do
       scale <- getLine
       putStrLn
-        "Calculando...\n"
+        $ show
+        $ function
+        $ readScale scale
+
+function :: Scale -> Scale
+function scale =
       showResult
-        $ nub
-        $ induce
-        $ readScale
-          scale
-      putStrLn
-        "\nTerminado."
+    $ nub
+    $ induce
+      scale
+
 
 
 readScale :: String -> Scale
 readScale scale
-  = (\x -> if length x > 12 then [] else x)
+  = nub
+  $ sort
+  $ (\x -> if length x > 12 then [] else x)
   $ map
     (flip mod long . fst . head)
   $ filter
@@ -39,63 +93,18 @@ readScale scale
     scale
 
 
--- Mostrar una escala.
-showScale :: Scale -> String
-showScale scale
-  = drop 1  -- Quita el primer espacio.
-  $ foldl
-    (\acc i ->
-      acc
-      ++ " "
-      ++ show i
-      -- Deja doble hueco en los números de una cifra.
-      ++ if i >= 0 && i < 10
-          then " "
-          else ""
-    ) "" scale
-
-
--- Mostrar varias escalas.
-showScales :: [Scale] -> String
-showScales scales
-  = drop 1
-  $ foldl
-    (\acc sc ->
-      acc
-      ++ "\n"
-      ++ showScale sc
-    ) "" scales
-
-
 -- Mostrar el resultado del cálculo.
-showResult :: [Scale] -> IO ()
+showResult :: [Scale] -> Scale
 -- `best` requiere no vacío.
 -- Si ponemos la restricción en `best`, entonces falla head aquí.
 showResult []
-  = return ()
+  = []
 
 showResult scales
-  = do
-      putStrLn
-        $ showScale [ 0 .. (long - 1) ]
-      putStrLn
-        $ replicate (long * 3 - 1) '―'
-      putStrLn
-        $ showScales scales
-      putStrLn
-        $ "\nMayor ajuste ("
-        ++ show bestPunct
-        ++ "):"
-      putStrLn
-        $ showScales bestFits
-      putStrLn
-        "\nLa más grave es:"
-      putStrLn
-        $ showScale
-        $ head
-        $ sort
-          bestFits
-    where
+  = head
+    $ sort
+    bestFits
+  where
       (bestFits, bestPunct) =
         best scales
 
